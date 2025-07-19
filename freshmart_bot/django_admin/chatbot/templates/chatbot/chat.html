@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FreshMart Chatbot</title>
+<style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    #chatbot-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 320px;
+      height: 460px;
+      border: 1px solid #ccc;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      background-color: #fefefe;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 1000;
+    }
+
+    #chat-header {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    #chat-log {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message-row {
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .bot .message-row {
+      flex-direction: row;
+      align-items: flex-start;
+    }
+
+    .user .message-row {
+      flex-direction: row;
+      justify-content: flex-end;
+    }
+
+    .message-content {
+      max-width: 75%;
+      padding: 8px 12px;
+      border-radius: 16px;
+      line-height: 1.4;
+      word-wrap: break-word;
+      position: relative;
+    }
+
+    .bot .message-content {
+      background-color: #e4f7ea;
+      color: #2d6a4f;
+      border-bottom-left-radius: 0;
+      margin-right: auto; /* This pushes bot messages to the left */
+    }
+
+    .user .message-content {
+      background-color: #e0e0e0;
+      color: #333;
+      margin-left: auto; /* This pushes user messages to the right */
+      border-bottom-right-radius: 0;
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      margin: 2px 6px 0 0;
+    }
+
+    .timestamp {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    #question-options {
+      padding: 10px;
+      border-top: 1px solid #ccc;
+      background-color: #fafafa;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .option-button {
+      flex: 1 1 100%;
+      padding: 8px 10px;
+      background-color: #e0f3e6;
+      color: #333;
+      border: 1px solid #b6e2c9;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background-color 0.2s;
+    }
+
+    .option-button:hover {
+      background-color: #cdebd9;
+    }
+
+    .typing-indicator {
+      font-style: italic;
+      color: #666;
+      font-size: 12px;
+      margin-left: 36px;
+    }
+        #complaint-form {
+      padding: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      background-color: #fff8f0;
+      border-top: 1px solid #ccc;
+    }
+    #complaint-text {
+      width: 100%;
+      height: 60px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 8px;
+      resize: none;
+    }
+    #submit-complaint {
+      background-color: #ffaf60;
+      color: #fff;
+      border: none;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .complaint-input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      margin-top: 8px;
+      font-family: inherit;
+      resize: none;
+    }
+    .bot-text-input {
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+    <div id="chatbot-container">
+      <div id="chat-header">FreshMart Assistant</div>
+      <div id="chat-log"></div>
+      <div id="question-options"></div>
+      <div id="complaint-form">
+        <textarea id="complaint-text" placeholder="Describe your issue..."></textarea>
+        <button id="submit-complaint">Submit Complaint</button>
+      </div>
+    </div>
+
+<script>
+  const chatLog = document.getElementById('chat-log');
+  const questionOptions = document.getElementById('question-options');
+  const botAvatar = 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png';
+
+  const questions = {
+    start: {
+      prompt: "Please choose one of the following:",
+      options: [
+        { text: "🗂️ Order Status", next: "orderStatus" },
+        { text: "📝 Product Inquiry", next: "productInquiry" },
+        { text: "📦 Return/Refund", next: "refundOptions" },
+        { text: "📣 File a Complaint", next: "complaintStart" }
+      ]
+    },
+    orderStatus: {
+      prompt: "Here are some options for your order status:",
+      options: [
+        { text: "It’s delayed", next: "delayResponse" },
+        { text: "I got the wrong item", next: "wrongItem" },
+        { text: "Back 🔙", next: "start" }
+      ]
+    },
+    productInquiry: {
+      prompt: "Here are some product-related inquiries:",
+      options: [
+        { text: "Do you sell organic fruits?", next: "organicResponse" },
+        { text: "Do you restock out-of-stock items?", next: "restockResponse" },
+        { text: "Back 🔙", next: "start" }
+      ]
+    },
+    refundOptions: {
+      prompt: "Select your refund or return concern:",
+      options: [
+        { text: "How do I return an item?", next: "returnInfo" },
+        { text: "Where’s my refund?", next: "refundStatus" },
+        { text: "Back 🔙", next: "start" }
+      ]
+    }
+  };
+
+  const responses = {
+    delayResponse: "We apologize for the delay. Our team is working to deliver as soon as possible.",
+    wrongItem: "We’re sorry! Please email support@freshmart.com with your order number.",
+    organicResponse: "Yes! We sell a variety of organic fruits. Check the 'Organic' section.",
+    restockResponse: "Out-of-stock items are usually restocked within a week.",
+    returnInfo: "To return an item, visit your order page and click 'Return'.",
+    refundStatus: "Refunds are processed within 3-5 business days. Please check your email."
+  };
+
+  const fallbackOptions = [
+    { text: "🔙 Back to Main Menu", next: "start" }
+  ];
+
+  function showComplaintInput() {
+    questionOptions.innerHTML = '';
+
+    const instruction = document.createElement('div');
+    instruction.className = 'bot-text-input';
+    instruction.innerText = "Please type your complaint below:";
+
+    const input = document.createElement('textarea');
+    input.className = 'complaint-input';
+    input.rows = 3;
+    input.placeholder = "Type your complaint...";
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.gap = '10px';
+    buttonContainer.style.marginTop = '10px';
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'option-button';
+    submitBtn.innerText = "Submit Complaint";
+
+    const backBtn = document.createElement('button');
+    backBtn.className = 'option-button';
+    backBtn.innerText = "Back";
+
+    submitBtn.onclick = async () => {
+      const complaint = input.value.trim();
+      if (complaint === '') return;
+
+      // Disable both buttons to prevent multiple submissions
+      submitBtn.disabled = true;
+      backBtn.disabled = true;
+      submitBtn.innerText = "Submitting...";
+
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      addMessage("user", complaint, time);
+      saveChatToSession("user", complaint, time);
+
+      try {
+        const res = await fetch('/chatbot/submit-complaint/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ complaint })
+        });
+
+        // Optional: Check for errors (res.ok)
+        addMessage("bot", "Thank you! Your complaint has been submitted to our support team.", time);
+        saveChatToSession("bot", "Thank you! Your complaint has been submitted to our support team.", time);
+      } catch (error) {
+        console.error("Error submitting complaint:", error);
+        addMessage("bot", "Sorry, something went wrong. Please try again later.", time);
+      }
+
+      showDynamicOptions(fallbackOptions);
+    };
+
+    backBtn.onclick = () => {
+      showDynamicOptions(fallbackOptions);
+    };
+
+    buttonContainer.appendChild(submitBtn);
+    buttonContainer.appendChild(backBtn);
+
+    questionOptions.appendChild(instruction);
+    questionOptions.appendChild(input);
+    questionOptions.appendChild(buttonContainer);
+  }
+
+  function addMessage(sender, text, time = null) {
+    const wrapper = document.createElement('div');
+    wrapper.className = `${sender} message-row`;
+
+    const bubble = document.createElement('div');
+    bubble.className = `message-content ${sender}`;
+    bubble.innerText = text;
+
+    const timestamp = document.createElement('div');
+    timestamp.className = 'timestamp';
+    timestamp.innerText = time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    bubble.appendChild(timestamp);
+
+    if (sender === 'bot') {
+      const avatar = document.createElement('img');
+      avatar.src = botAvatar;
+      avatar.className = 'avatar';
+      wrapper.appendChild(avatar);
+      wrapper.appendChild(bubble);
+    } else {
+      wrapper.appendChild(bubble);
+    }
+
+    chatLog.appendChild(wrapper);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function showTypingIndicator() {
+    const typing = document.createElement('div');
+    typing.className = 'typing-indicator';
+    typing.id = 'typing';
+    typing.innerText = 'FreshMart is typing...';
+    chatLog.appendChild(typing);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function removeTypingIndicator() {
+    const typing = document.getElementById('typing');
+    if (typing) typing.remove();
+  }
+
+  function showOptions(key) {
+    questionOptions.innerHTML = '';
+    const group = questions[key];
+    if (!group) return;
+
+    // Show the prompt message before showing options
+    if (group.prompt) {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      addMessage("bot", group.prompt, time);
+      saveChatToSession("bot", group.prompt, time);
+    }
+
+    group.options.forEach(option => {
+      const btn = document.createElement('button');
+      btn.className = 'option-button';
+      btn.innerText = option.text;
+      btn.onclick = () => handleUserChoice(option);
+      questionOptions.appendChild(btn);
+    });
+
+    sessionStorage.setItem('chatFlowKey', key);
+  }
+
+  function showDynamicOptions(options) {
+    questionOptions.innerHTML = '';
+    options.forEach(option => {
+      const btn = document.createElement('button');
+      btn.className = 'option-button';
+      btn.innerText = option.text;
+      btn.onclick = () => handleUserChoice(option);
+      questionOptions.appendChild(btn);
+    });
+  }
+
+
+  function handleUserChoice(option) {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    addMessage("user", option.text, time);
+    saveChatToSession("user", option.text, time);
+
+    questionOptions.innerHTML = '';
+    showTypingIndicator();
+
+    setTimeout(() => {
+      removeTypingIndicator();
+
+      if (option.next === 'complaintStart') {
+        showComplaintInput();
+        return;
+      }
+
+      if (responses[option.next]) {
+        addMessage("bot", responses[option.next], time);
+        saveChatToSession("bot", responses[option.next], time);
+        showDynamicOptions(fallbackOptions);
+      } else if (questions[option.next]) {
+        showOptions(option.next);
+      } else {
+        showOptions("start");
+      }
+    }, 800);
+  }
+
+  function saveChatToSession(sender, text, time) {
+    const existing = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
+    existing.push({ sender, text, time });
+    sessionStorage.setItem('chatHistory', JSON.stringify(existing));
+  }
+
+  function restoreChat() {
+    const history = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
+    history.forEach(msg => {
+      addMessage(msg.sender, msg.text, msg.time);
+    });
+
+    const flowKey = sessionStorage.getItem('chatFlowKey') || 'start';
+    showOptions(flowKey);
+  }
+
+  function startChat() {
+    const greeting = "Hi there! How can I help you today?";
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    addMessage("bot", greeting, time);
+    saveChatToSession("bot", greeting, time);
+    showOptions("start");
+  }
+
+  window.onload = () => {
+    const history = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
+    if (history.length > 0) {
+      restoreChat();
+    } else {
+      startChat();
+    }
+  };
+</script>
+</body>
+</html>
